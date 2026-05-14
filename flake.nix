@@ -1,7 +1,12 @@
 {
   description = "A Nix Flake semi-opinionated framework";
 
-  outputs = {
+  outputs =
+    {
+      ...
+    }:
+    {
+      mkFlake = import ./packages;
 
-  };
+    };
 }
