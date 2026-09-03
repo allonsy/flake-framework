@@ -35,7 +35,12 @@ let
 
   utilsDir = frameworkDir + "/utils";
   hasUtils = builtins.pathExists utilsDir;
-  utils = if hasUtils then (import utilsDir) (baseInputs // { vars = vars; }) else { };
+  utilInputs = baseInputs // {
+    vars = vars;
+  };
+  defaultUtils = import ../../utils utilInputs;
+  flakeUtils = if hasUtils then (import utilsDir) (utilInputs // { utils = defaultUtils; }) else { };
+  utils = defaultUtils // flakeUtils;
 
   packageInputs =
     baseInputs
