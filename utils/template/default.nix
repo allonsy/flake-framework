@@ -4,7 +4,7 @@
   ...
 }:
 let
-  placeholderPattern = "(\\\\?)\\{\\{([^{}]*)\\}\\}";
+  placeholderPattern = "(\\\\?)[{][{]([^{}]*)[}][}]";
 
   keyPattern = "[[:space:]]*([^[:space:]]+)[[:space:]]*";
 
