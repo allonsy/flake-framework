@@ -6,6 +6,9 @@ BUILD_DIR=@buildDir@
 SYSTEM_DIR=@profileDir@
 GC_ROOT_DIR=/nix/var/nix/gcroots/auto/system
 
+export SSL_CERT_FILE=@sslCertFile@
+export NIX_REMOTE=daemon
+
 usage() {
   cat <<USAGE
 Usage: nprofile <command> [args]

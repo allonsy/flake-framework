@@ -12,6 +12,7 @@ pkgs.stdenv.mkDerivation {
   nprofileScript = pkgs.replaceVars ./nprofile.sh {
     buildDir = pkgs.lib.escapeShellArg buildDir;
     profileDir = pkgs.lib.escapeShellArg profileDir;
+    sslCertFile = "${pkgs.cacert}/etc/ssl/certs/ca-certificates.crt";
   };
 
   installPhase = ''
