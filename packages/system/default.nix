@@ -50,7 +50,15 @@ let
     }
     // packages;
 
-  packages = lib.genAttrs packageNames (name: import (packageDir + "/${name}") packageInputs);
+  hasProfileManager = vars ? FRAMEWORK_BUILD_DIR && vars ? FRAMEWORK_PROFILE_DIR;
+  profileManager = import ../profile-manager {
+    pkgs = pkgs;
+    buildDir = vars.FRAMEWORK_BUILD_DIR;
+    profileDir = vars.FRAMEWORK_PROFILE_DIR;
+  };
+
+  userPackages = lib.genAttrs packageNames (name: import (packageDir + "/${name}") packageInputs);
+  packages = userPackages // lib.optionalAttrs hasProfileManager { inherit profileManager; };
   apps = lib.genAttrs appNames (name: import (appDir + "/${name}") packageInputs);
   frameworkApps = import ../../apps {
     system = system;

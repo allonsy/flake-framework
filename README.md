@@ -257,23 +257,22 @@ defaults, so your utils can build on them:
 
 ### Templating
 
-`utils.writeTemplate` renders a template file into the store, and
-`utils.renderTemplate` renders a template string into a string:
+`utils.writeTemplate` renders a template file into the store. It is a thin
+wrapper around nixpkgs' [`pkgs.replaceVars`](https://nixos.org/manual/nixpkgs/stable/#fun-replaceVars):
 
 ```nix
 { utils, vars, ... }:
 utils.writeTemplate ./service.conf {
   NAME = vars.serviceName;
-  PORT = 9090;
+  PORT = "9090";
 }
 ```
 
 With `service.conf`:
 
 ```
-name = {{ NAME }}
-port = {{PORT}}
-literal = \{{ NAME }}
+name = @NAME@
+port = @PORT@
 ```
 
 rendering to a `service.conf` in the store:
@@ -281,28 +280,94 @@ rendering to a `service.conf` in the store:
 ```
 name = my-service
 port = 9090
-literal = {{ NAME }}
 ```
 
-The rules are the same for both functions:
+The rules are `replaceVars`':
 
-- `{{ KEY }}` and `{{KEY}}` are the same placeholder; whitespace inside the
-  braces is ignored.
-- A `\` before a placeholder escapes it, leaving `{{ KEY }}` in the output
-  verbatim.
-- Values may be strings, integers, paths or derivations. Other types have no
-  unambiguous string form, so convert them yourself.
-- A key that is missing from the context is an error, as is a placeholder that
-  does not contain exactly one key (`{{}}` or `{{ A B }}`). Nothing is
-  silently passed through, so a typo fails the build instead of shipping.
-- Interpolated values are not rescanned, so a value containing `{{ ... }}`
-  stays as it is.
+- A placeholder is `@KEY@`, where the key starts with a letter or `_` and
+  continues with letters, digits, `_`, `'` or `-`.
+- Values are strings, paths or derivations; convert anything else yourself.
+- A placeholder in the file with no value, or a value that matches no
+  placeholder, fails the build. Nothing is silently passed through, so a typo
+  does not ship.
+- There is no escape syntax. To keep a literal `@KEY@` in the output, pass
+  `null` as that key's value.
+
+## Profile manager
+
+The framework can add a `profileManager` package that installs `bin/nprofile`,
+a script for managing your flake as a single Nix "monoprofile". Build the flake
+into one package (say `default`), and `nprofile` keeps a `current` link to the
+latest build, keeps older builds around to roll back to, and roots them all so
+garbage collection leaves them alone.
+
+It is optional. Set both of these in your [vars](#vars) to turn it on:
+
+```nix
+# src/vars/default.nix
+_: {
+  FRAMEWORK_BUILD_DIR = "/home/me/nix";
+  FRAMEWORK_PROFILE_DIR = "/system";
+}
+```
+
+| Var                     | Description                                                       |
+| ----------------------- | ----------------------------------------------------------------- |
+| `FRAMEWORK_BUILD_DIR`   | The directory holding your flake. `nprofile update` builds `.` there. |
+| `FRAMEWORK_PROFILE_DIR` | Where profile links are kept, such as `/system`.                  |
+
+If either is missing, no package is added. Once on, `profileManager` is
+`packages.<system>.profileManager` and is also passed to your other packages
+and apps by name, so it can be included in your profile like any other
+package. A package of your own called `profileManager` is replaced by it.
+
+### Usage
+
+```
+nprofile <command> [args]
+
+Commands:
+  provision           Create /nix/var/nix/gcroots/auto/system (needs root),
+                      where update registers a GC root for each previous profile
+  update              Build the flake and point $FRAMEWORK_PROFILE_DIR/current
+                      at the result
+  clean               Remove every link in $FRAMEWORK_PROFILE_DIR except current
+  rollback [name]     Replace current with the newest other link, or with the
+                      link called <name> (e.g. 2026_09_09_12_12_12)
+```
+
+Running it with no command prints the usage.
+
+- **`provision`** creates `/nix/var/nix/gcroots/auto/system`. Run it once per
+  machine, before the first `update`. `update` and `rollback` refuse to run
+  until it exists.
+- **`update`** runs `nix build .` in `FRAMEWORK_BUILD_DIR` and points
+  `current` at the result. If there was already a `current`, it is first copied
+  to a link named after the time, such as `2026_09_09_12_12_12`, so that build
+  stays available.
+- **`clean`** deletes every link directly inside `FRAMEWORK_PROFILE_DIR` except
+  `current`. It does not recurse, and anything that is not a link is skipped
+  with a warning.
+- **`rollback`** copies the newest link (by creation time) other than
+  `current` over `current`. Give it a name to pick a specific link instead. The
+  link it copies from is kept, so running it again picks the same one; pass
+  a name to go further back. The build that was `current` is not kept.
+
+Every link is registered as a GC root under
+`/nix/var/nix/gcroots/auto/system`, along with `current` itself, so
+`nix store gc` keeps what they point to. Nix drops a root once its link is
+gone, which is how `clean` frees old builds: there is nothing to prune by hand.
+
+`nprofile` only asks for `sudo` when the directory it writes to is not
+writable by you: `FRAMEWORK_PROFILE_DIR`, or the GC root directory for
+`provision`. The GC root directory is normally root-owned, so in practice
+`update` and `rollback` will need `sudo` unless you have changed its ownership.
 
 ## Formatter
 
 `formatter` is set to `nixfmt-tree` for every system, so `nix fmt` formats
 your flake.
 
-## Tests
+## Development
 
-`./test` checks the framework's default utils. `./fmt` formats the repository.
+`./fmt` formats the repository.
